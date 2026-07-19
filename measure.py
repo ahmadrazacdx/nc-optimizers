@@ -63,7 +63,7 @@ def compute_metrics(features, labels, W, b):
     
     nc4 = 1.0 - (model_preds == ncc_preds).float().mean().item()
     
-    return nc1, nc2, nc3, nc4
+    return nc1, nc2, nc3, nc4, M_hat
 
 
 def plot_metrics(all_results, optimizers, epochs):
@@ -100,6 +100,56 @@ def plot_metrics(all_results, optimizers, epochs):
     print("Saved figures/nc_metrics.png")
 
 
+def plot_training_curves(all_accs, optimizers, epochs):
+    fig, axes = plt.subplots(1, 2, figsize=(10, 4))
+    colors = {'sgd': '#D55E00', 'adam': '#0072B2', 'adamw': '#009E73'}
+    
+    for opt in optimizers:
+        if opt in all_accs:
+            train_accs = [x * 100 for x in all_accs[opt]['train']]
+            test_accs = [x * 100 for x in all_accs[opt]['test']]
+            axes[0].plot(epochs, train_accs, marker='o', label=opt.upper(), color=colors[opt], linewidth=2)
+            axes[1].plot(epochs, test_accs, marker='o', label=opt.upper(), color=colors[opt], linewidth=2)
+            
+    axes[0].set_title('Train Accuracy (%)', fontweight='bold')
+    axes[1].set_title('Test Accuracy (%)', fontweight='bold')
+    for ax in axes:
+        ax.set_xlabel('Epoch')
+        ax.set_ylabel('Accuracy')
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.grid(True, linestyle='--', alpha=0.5)
+        ax.legend(frameon=False)
+        
+    plt.tight_layout()
+    plt.savefig('figures/training_curves.png', dpi=150, bbox_inches='tight')
+    plt.close()
+    print("Saved figures/training_curves.png")
+
+
+def plot_cosine_similarity(M_hat, opt_name):
+    fig, ax = plt.subplots(figsize=(6, 5))
+    cos_sim = (M_hat @ M_hat.T).numpy()
+    
+    im = ax.imshow(cos_sim, cmap='coolwarm', vmin=-1, vmax=1)
+    plt.colorbar(im, ax=ax)
+    
+    ax.set_title(f'ETF Cosine Similarity ({opt_name.upper()})', fontweight='bold')
+    ax.set_xticks(range(10))
+    ax.set_yticks(range(10))
+    
+    for i in range(10):
+        for j in range(10):
+            val = cos_sim[i, j]
+            color = 'white' if abs(val) > 0.5 else 'black'
+            ax.text(j, i, f"{val:.2f}", ha='center', va='center', color=color, fontsize=8)
+            
+    plt.tight_layout()
+    plt.savefig(f'figures/cosine_similarity_{opt_name}.png', dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"Saved figures/cosine_similarity_{opt_name}.png")
+
+
 def main():
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(f"Using device: {device}")
@@ -109,12 +159,16 @@ def main():
     optimizers = ['sgd', 'adam', 'adamw']
     epochs = list(range(10, 201, 10))
     all_results = {}
+    all_accs = {}
     
     for opt in optimizers:
         if not os.path.exists(f'checkpoints/{opt}_final.pt'):
             print(f"Skipping {opt}, final checkpoint not found.")
             continue
         opt_metrics = []
+        train_accs, test_accs = [], []
+        last_M_hat = None
+        
         for ep in epochs:
             ckpt_path = f'checkpoints/{opt}_epoch{ep}.pt'
             if not os.path.exists(ckpt_path):
@@ -125,21 +179,30 @@ def main():
             ckpt = torch.load(ckpt_path, map_location=device)
             model.load_state_dict(ckpt['model_state'])
             
+            train_accs.append(ckpt['train_acc'])
+            test_accs.append(ckpt['test_acc'])
+            
             features, labels = extract_features(model, train_loader, device)
             
             W = model.head.weight.detach().cpu()
             b = model.head.bias.detach().cpu()
             
-            nc1, nc2, nc3, nc4 = compute_metrics(features, labels, W, b)
+            nc1, nc2, nc3, nc4, M_hat = compute_metrics(features, labels, W, b)
             opt_metrics.append([nc1, nc2, nc3, nc4])
-            print(f"Ep {ep:3d} | NC1: {nc1:7.4f} | NC2: {nc2:6.4f} | NC3: {nc3:6.4f} | NC4: {nc4:6.4f}")
+            last_M_hat = M_hat
+            print(f"  Ep {ep:3d} | NC1: {nc1:7.4f} | NC2: {nc2:6.4f} | NC3: {nc3:6.4f} | NC4: {nc4:6.4f}")
             
         all_results[opt] = np.array(opt_metrics)
+        all_accs[opt] = {'train': train_accs, 'test': test_accs}
+        
+        if last_M_hat is not None:
+            plot_cosine_similarity(last_M_hat, opt)
         
     if all_results:
         first_opt = list(all_results.keys())[0]
         actual_epochs = epochs[:len(all_results[first_opt])]
         plot_metrics(all_results, optimizers, actual_epochs)
+        plot_training_curves(all_accs, optimizers, actual_epochs)
     else:
         print("\nNo checkpoints found.")
 
