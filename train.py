@@ -72,6 +72,9 @@ def main():
         
     set_seed(args.seed)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    if device == 'cuda':
+        torch.backends.cudnn.benchmark = True
+        
     os.makedirs('checkpoints', exist_ok=True)
 
     print(f"--- Training with {args.optimizer.upper()} ---")
