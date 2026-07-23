@@ -1,6 +1,7 @@
 """Compute Neural Collapse metrics."""
 
 import os
+import json
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
@@ -203,6 +204,16 @@ def main():
         actual_epochs = epochs[:len(all_results[first_opt])]
         plot_metrics(all_results, optimizers, actual_epochs)
         plot_training_curves(all_accs, optimizers, actual_epochs)
+        
+        export_data = {
+            'epochs': actual_epochs,
+            'optimizers': list(all_results.keys()),
+            'metrics': {opt: all_results[opt].tolist() for opt in all_results},
+            'accuracies': all_accs
+        }
+        with open('figures/metrics_data.json', 'w') as f:
+            json.dump(export_data, f, indent=4)
+        print("Saved raw data to figures/metrics_data.json")
     else:
         print("\nNo checkpoints found.")
 
