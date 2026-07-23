@@ -53,7 +53,7 @@ def evaluate(model, loader, criterion, device):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--optimizer', type=str, choices=['sgd', 'adam', 'adamw'], default='sgd')
-    parser.add_argument('--epochs', type=int, default=200)
+    parser.add_argument('--epochs', type=int, default=350)
     parser.add_argument('--batch_size', type=int, default=128)
     parser.add_argument('--lr', type=float, default=None, help='Default depends on optimizer')
     parser.add_argument('--weight_decay', type=float, default=None, help='Default depends on optimizer')
@@ -93,7 +93,8 @@ def main():
     elif args.optimizer == 'adamw':
         optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=wd)
         
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
+    milestones = [args.epochs // 3, (2 * args.epochs) // 3]
+    scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=milestones, gamma=0.1)
     
     print(f"{'Epoch':>5} | {'Train Loss':>10} | {'Train Acc':>9} | {'Test Loss':>9} | {'Test Acc':>8}")
     print("-" * 65)

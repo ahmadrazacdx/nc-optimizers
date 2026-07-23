@@ -157,7 +157,7 @@ def main():
     train_loader, _ = get_loaders(batch_size=256, num_workers=0)
     
     optimizers = ['sgd', 'adam', 'adamw']
-    epochs = list(range(10, 201, 10))
+    epochs = list(range(10, 351, 10))
     all_results = {}
     all_accs = {}
     
