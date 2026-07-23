@@ -34,10 +34,12 @@ def get_loaders(batch_size=128, data_dir='./data', num_workers=4):
 
     train_loader = torch.utils.data.DataLoader(
         train_set, batch_size=batch_size, shuffle=True,
-        num_workers=num_workers, pin_memory=True)
+        num_workers=num_workers, pin_memory=True,
+        persistent_workers=(num_workers > 0))
     test_loader = torch.utils.data.DataLoader(
         test_set, batch_size=batch_size, shuffle=False,
-        num_workers=num_workers, pin_memory=True)
+        num_workers=num_workers, pin_memory=True,
+        persistent_workers=(num_workers > 0))
 
     return train_loader, test_loader
 

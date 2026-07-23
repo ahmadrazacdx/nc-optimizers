@@ -15,10 +15,14 @@ def set_seed(seed):
     np.random.seed(seed)
 
 
-def train_epoch(model, loader, optimizer, criterion, device):
+from tqdm import tqdm
+
+def train_epoch(model, loader, optimizer, criterion, device, epoch, total_epochs):
     model.train()
     total_loss, total_correct, total_samples = 0.0, 0, 0
-    for images, labels in loader:
+    
+    pbar = tqdm(loader, desc=f"Epoch {epoch:>3}/{total_epochs}", leave=False, dynamic_ncols=True)
+    for images, labels in pbar:
         images, labels = images.to(device), labels.to(device)
         
         optimizer.zero_grad()
@@ -30,6 +34,8 @@ def train_epoch(model, loader, optimizer, criterion, device):
         total_loss += loss.item() * len(labels)
         total_correct += (logits.argmax(dim=1) == labels).sum().item()
         total_samples += len(labels)
+        
+        pbar.set_postfix({'Loss': f"{total_loss/total_samples:.4f}", 'Acc': f"{100*total_correct/total_samples:.2f}%"})
         
     return total_loss / total_samples, total_correct / total_samples
 
@@ -100,7 +106,7 @@ def main():
     print("-" * 65)
     
     for epoch in range(1, args.epochs + 1):
-        train_loss, train_acc = train_epoch(model, train_loader, optimizer, criterion, device)
+        train_loss, train_acc = train_epoch(model, train_loader, optimizer, criterion, device, epoch, args.epochs)
         scheduler.step()
         
         if epoch % 10 == 0 or epoch == args.epochs:
