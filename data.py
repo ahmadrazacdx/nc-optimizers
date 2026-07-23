@@ -15,7 +15,7 @@ class FastCIFAR10(torchvision.datasets.CIFAR10):
     def _check_integrity(self):
         return True
 
-def get_loaders(batch_size=128, data_dir='./data', num_workers=2):
+def get_loaders(batch_size=128, data_dir='./data', num_workers=4):
     train_transform = T.Compose([
         T.RandomCrop(32, padding=4),
         T.RandomHorizontalFlip(),
