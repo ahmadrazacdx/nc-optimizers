@@ -4,7 +4,6 @@ import os
 import json
 import torch
 import numpy as np
-import matplotlib.pyplot as plt
 from model import ResNet18
 from data import get_loaders
 
@@ -67,90 +66,6 @@ def compute_metrics(features, labels, W, b):
     return nc1, nc2, nc3, nc4, M_hat
 
 
-def plot_metrics(all_results, optimizers, epochs):
-    os.makedirs('figures', exist_ok=True)
-    fig, axes = plt.subplots(2, 2, figsize=(10, 8))
-    metrics = [
-        'Within-class collapse',
-        'Simplex ETF', 
-        'Self-duality', 
-        'NCC agreement'
-    ]
-    
-    colors = {'sgd': '#D55E00', 'adam': '#0072B2', 'adamw': '#009E73'}
-    
-    for i, ax in enumerate(axes.flatten()):
-        for opt in optimizers:
-            if opt in all_results:
-                ax.plot(epochs, all_results[opt][:, i], marker='o', 
-                        label=opt.upper(), color=colors[opt], linewidth=2)
-        
-        ax.set_title(metrics[i], fontsize=11, fontweight='bold')
-        ax.set_xlabel('Epoch')
-        
-        if i == 0:
-            ax.set_yscale('log')
-            ax.legend(frameon=False)
-            
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-        ax.grid(True, linestyle='--', alpha=0.5)
-            
-    plt.tight_layout()
-    plt.savefig('figures/nc_metrics.png', dpi=150, bbox_inches='tight')
-    print("Saved figures/nc_metrics.png")
-
-
-def plot_training_curves(all_accs, optimizers, epochs):
-    fig, axes = plt.subplots(1, 2, figsize=(10, 4))
-    colors = {'sgd': '#D55E00', 'adam': '#0072B2', 'adamw': '#009E73'}
-    
-    for opt in optimizers:
-        if opt in all_accs:
-            train_accs = [x * 100 for x in all_accs[opt]['train']]
-            test_accs = [x * 100 for x in all_accs[opt]['test']]
-            axes[0].plot(epochs, train_accs, marker='o', label=opt.upper(), color=colors[opt], linewidth=2)
-            axes[1].plot(epochs, test_accs, marker='o', label=opt.upper(), color=colors[opt], linewidth=2)
-            
-    axes[0].set_title('Train Accuracy (%)', fontweight='bold')
-    axes[1].set_title('Test Accuracy (%)', fontweight='bold')
-    for ax in axes:
-        ax.set_xlabel('Epoch')
-        ax.set_ylabel('Accuracy')
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-        ax.grid(True, linestyle='--', alpha=0.5)
-        ax.legend(frameon=False)
-        
-    plt.tight_layout()
-    plt.savefig('figures/training_curves.png', dpi=150, bbox_inches='tight')
-    plt.close()
-    print("Saved figures/training_curves.png")
-
-
-def plot_cosine_similarity(M_hat, opt_name):
-    fig, ax = plt.subplots(figsize=(6, 5))
-    cos_sim = (M_hat @ M_hat.T).numpy()
-    
-    im = ax.imshow(cos_sim, cmap='coolwarm', vmin=-1, vmax=1)
-    plt.colorbar(im, ax=ax)
-    
-    ax.set_title(f'ETF Cosine Similarity ({opt_name.upper()})', fontweight='bold')
-    ax.set_xticks(range(10))
-    ax.set_yticks(range(10))
-    
-    for i in range(10):
-        for j in range(10):
-            val = cos_sim[i, j]
-            color = 'white' if abs(val) > 0.5 else 'black'
-            ax.text(j, i, f"{val:.2f}", ha='center', va='center', color=color, fontsize=8)
-            
-    plt.tight_layout()
-    plt.savefig(f'figures/cosine_similarity_{opt_name}.png', dpi=150, bbox_inches='tight')
-    plt.close()
-    print(f"Saved figures/cosine_similarity_{opt_name}.png")
-
-
 def main():
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(f"Using device: {device}")
@@ -161,6 +76,7 @@ def main():
     epochs = list(range(10, 351, 10))
     all_results = {}
     all_accs = {}
+    all_m_hats = {}
     
     for opt in optimizers:
         if not os.path.exists(f'checkpoints/{opt}_final.pt'):
@@ -197,23 +113,23 @@ def main():
         all_accs[opt] = {'train': train_accs, 'test': test_accs}
         
         if last_M_hat is not None:
-            plot_cosine_similarity(last_M_hat, opt)
+            all_m_hats[opt] = last_M_hat.tolist()
         
     if all_results:
+        os.makedirs('artifacts', exist_ok=True)
         first_opt = list(all_results.keys())[0]
         actual_epochs = epochs[:len(all_results[first_opt])]
-        plot_metrics(all_results, optimizers, actual_epochs)
-        plot_training_curves(all_accs, optimizers, actual_epochs)
         
         export_data = {
             'epochs': actual_epochs,
             'optimizers': list(all_results.keys()),
             'metrics': {opt: all_results[opt].tolist() for opt in all_results},
-            'accuracies': all_accs
+            'accuracies': all_accs,
+            'm_hats': all_m_hats
         }
-        with open('figures/metrics_data.json', 'w') as f:
+        with open('artifacts/metrics_data.json', 'w') as f:
             json.dump(export_data, f, indent=4)
-        print("Saved raw data to figures/metrics_data.json")
+        print("Saved raw data to artifacts/metrics_data.json")
     else:
         print("\nNo checkpoints found.")
 
